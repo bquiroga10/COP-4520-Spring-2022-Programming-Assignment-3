@@ -9,8 +9,6 @@ const int NUM_THREADS = 12;
 const int MIN = numeric_limits<int>::min();
 const int MAX = numeric_limits<int>::max();
 
-vector<mt19937> generators(NUM_THREADS);
-
 // these are for the ease of giving out random gifts to
 // insert and delete from the linked list
 vector<thread> servants;
@@ -19,14 +17,6 @@ atomic<int> counter = 0;
 // create some ordering of the operations so that it makes the simulating easier
 vector<int> order(N);
 atomic<int> orderFront, orderBack;
-
- // random number in the range [lo, hi] (both inclusive)
-int randInRange(int lo, int hi, int servant) {
-  // separate number generator for each thread
-  uniform_int_distribution<int> distribution(lo, hi);
-  return distribution(generators[servant]);
-}
-
 
 // linked list node with value, next, and a mutex
 struct node {
@@ -128,10 +118,9 @@ LockOrderedLinkedList linkedList;
 
 void servant(int id) {
 
+  int operation = 0;
   // while there are nodes to remove, continue going along
   while(orderFront < N) {
-    // get a random number for what we will try to do (insert, remove, or search)
-    int operation = randInRange(0, 2, id);
 
     // insert
     if(operation == 0) {
@@ -140,6 +129,9 @@ void servant(int id) {
       int value = order[pos];
       linkedList.insert(value);
       counter++;
+      // flip which operation this servant will do
+      operation ^= 1;
+      continue;
     }
 
     // remove
@@ -148,12 +140,10 @@ void servant(int id) {
       int pos = orderFront++;
       int value = order[pos];
       linkedList.remove(value);
-    }
 
-    // search
-    if(operation == 2) {
-      int value = randInRange(1, N, id);
-      linkedList.search(value);
+      // flip which operation this servant will do
+      operation ^= 1;
+      continue;
     }
   }
 }
@@ -177,9 +167,6 @@ int main() {
   linkedList = LockOrderedLinkedList();
 
   for(int i = 0; i < NUM_THREADS; i++) {
-    int seed = rand();
-    generators[i] = mt19937(seed);
-
     servants.push_back(thread(servant, i));
   }
 
